@@ -1,5 +1,7 @@
-# upnpTube
-Cast from YouTube app to DLNA/UPNP renderers.
+# ytm-mpd
+Cast from YouTube app to MPD.
+
+Mostly inspired by upnpTube https://github.com/mas94uk/upnpTube but without dlna support and instead a hardcoded mpd instance. 
 
 Run upnpTube on a machine on your local network. It finds all UPnP / DLNA renderers (Wifi speakers, amplifiers, smart TVs etc.) and lets you cast to them from the Android/iPhone YouTube apps.
 
@@ -37,6 +39,3 @@ upnpTube scans for DLNA/UPNP renderers on your network. For each one it finds, i
 When a YouTube Cast Receiver receives a cast, it uses yt-dlp to find an audio-only stream, which it proxies (since it will be available as HTTPS and most renderers support only HTTP). It instructs the renderer to play the proxied stream.
 
 
-### Limitations
-
-Seeking does not work. I have not done much investigation into why.
