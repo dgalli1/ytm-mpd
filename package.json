@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mas94uk/upnpTube.git"
+    "url": "git+https://github.com/dgalli1/ytm-mpd.git"
   },
   "keywords": [
     "youtube",
@@ -21,13 +21,13 @@
   "author": "Mark Smith",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/mas94uk/upnpTube/issues"
+    "url": "https://github.com/dgalli1/ytm-mpd/issues"
   },
-  "homepage": "https://github.com/mas94uk/upnpTube#readme",
+  "homepage": "https://github.com/dgalli1/ytm-mpd/#readme",
   "dependencies": {
     "http-proxy": "^1.18.1",
     "mpd-api": "^1.1.1",
-    "yt-cast-receiver": "git+https://git@github.com/mas94uk/yt-cast-receiver.git"
+    "yt-cast-receiver": "git+https://github.com/dgalli1/yt-cast-receiver.git"
   },
   "bin": {
     "upnpTube": "./index.js"
