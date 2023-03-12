@@ -1,17 +1,12 @@
-const { Console } = require('console');
-const MediaRendererClient = require('upnp-mediarenderer-client');
 const { exec } = require('child_process');
-const os = require('os');
-const httpProxy = require('http-proxy');
+const mpdapi = require('mpd-api')
 
 // TODO: Ideally the author will accept the pull request and re-publish. Otherwise tie it to my fork.
 const Ytcr = require('yt-cast-receiver');
+const EventEmitter = require('events');
 
 // Use ports 3000, 3001, 3002 etc for successive YTCRs
 const YTCR_BASE_PORT = 3000;
-
-// Use port 800n for the HTTPS->HTTP proxying of the media
-const PROXY_BASE_PORT = 8000;
 
 // TODO Does this clean up nicely? YTCR instance disappear from the menu in the youtube app? Port freed etc?
 
@@ -21,59 +16,64 @@ const PROXY_BASE_PORT = 8000;
  */
 class Renderer extends Ytcr.Player {
     STALE_TIMEOUT = 300;  // A upnp renderer which has not been seen for 300s is considered to have disappeared
-
-    constructor(location, index)
+    
+    constructor(config)
     {
         // Call the Ytcr.Player constructor
         super();
+        this.eventEmitter = new EventEmitter();
+        (async () => {
+          
+            console.log("Creating new renderer: " + config.host);
+            this.httpServer = null;
+            this.refresh();
+            this.eventEmitter = new EventEmitter();
+            this.friendlyName = "Snapcast";
+            // Instantiate the mediarender client
+            this.config = config
+            this.client = await mpdapi.connect(config);
+            await this.client.api.playback.single('oneshot');
+            await this.client.api.playback.consume(0);
+            await this.client.api.queue.clear();
+            const options = {
+                port: YTCR_BASE_PORT,
+                friendlyName: 'Snapcast',
+                manufacturer: 'Snapcast',
+                modelName: 'MPD'
+            }; 
+            this.currentPlayStatus = 'stopped';
+            this.lastPlayBackCommand = 'NOTHING';
+            this.client.on('system', async name => {
+                if(name == 'player') {
+                    const status = await this.client.api.status.get();
+                    if(status.state !== this.currentPlayStatus) {
+                        this.currentPlayStatus = status.state;
+                        console.log("Status changed to " + status.state +" from " + this.lastPlayBackCommand );
+                        if(status.state == 'play') {
+                            this.notifyPlayed();
+                        } else if(status.state == 'stop' && this.lastPlayBackCommand == 'PLAY') {
+                            console.log("Play Next");
+                            this.requestPlayNext();
+                        }
+                    }
+                }
+              })
+            this.ytcr = Ytcr.instance(this, options);
+            this.ytcr.start();
+            this.ytcr.on('connected', () => {
+                this.notifyVolumeChanged();
+            });
+            //this.ytcr.on('disconnected', async () => {
+            //    console.log("Disconnected");
+            //    await this.ytcr.stop();
+            //    this.client.api.connection.close();
+            //    this.eventEmitter.emit('restart');
+            //});
+            // No errors so far
+            this.error = false    
+        })();
+       
 
-        console.log("Creating new renderer: " + location);
-        this.location = location;
-        this.index = index;
-        this.httpServer = null;
-        this.refresh();
-
-        // Instantiate the mediarender client
-        this.client = new MediaRendererClient(location);
-
-        // No errors so far
-        this.error = false
-
-        // Get device details
-        const obj = this;
-        this.client.getDeviceDescription(function(err, description) {
-            if (err) {
-                console.log("Failed to get device description from " + obj.location);
-                return;
-            }
-
-            // Create a friendly string from the above, which we will name the YouTube cast receiver
-            // e.g. "Living Room (Pure Jongo A2)"
-            const friendlyName = description.friendlyName;
-            const manufacturer = description.manufacturer;
-            const modelName = description.modelName;
-            obj.friendlyName = `🔊 ${friendlyName} (${manufacturer} ${modelName})`;
-            console.log(`[${obj.friendlyName}]: New renderer created`);
-
-            // TODO Select audio or video according to the capabilities of the renderer
-            // obj.client.getSupportedProtocols( function(error, protocols) {
-            //     if(err) {
-            //         console.log(`[${obj.friendlyName}]: getSupportedProtocols error:`);
-            //         console.log(err);
-            //     } else {
-            //         console.log(`[${obj.friendlyName}]: getSupportedProtocols:`);
-            //         console.log(protocols);
-            //     }
-            // });
-
-            // Create a youtube cast receiver
-            const options = {port: YTCR_BASE_PORT + obj.index,
-                             friendlyName: obj.friendlyName,
-                             manufacturer: description.manufacturer,
-                             modelName: description.modelName}; 
-            obj.ytcr = Ytcr.instance(obj, options);
-            obj.ytcr.start();
-        });
     }
 
     refresh() {
@@ -81,60 +81,34 @@ class Renderer extends Ytcr.Player {
         console.log("Refreshed renderer " + this.location + " to " + this.lastSeenTime);
     }
 
-    isStale() {
-        // If an error occurred in setup, we are stale. The program will delete us and recreate.e
-        if (this.error) return true;
-
-        // If we have not been refreshed (i.e. discovered again) in STALE_TIMEOUT, we are stale.
-        const now = Number(process.hrtime.bigint()  / 1000000000n);
-        if (this.lastSeenTime + this.STALE_TIMEOUT < now) return true;
-
-        return false;
-    }
-
-    getAudioUrl(videoId, callback) {
-        const obj = this;
-
-        // Call yt-dlp to get the audio URL
-        exec(`yt-dlp -f bestaudio[ext=m4a] --get-url ${videoId}`, function(err, stdout, stderr) {
-            if(err) {
-                console.log(`[${obj.friendlyName}]: Unable to get audio URL using yt-dlp. Using youtube-dl but this is slower!`);
-
-                // Enable to see what went wrong
-                // console.log(err);
-                // if(stdout) {
-                //     console.log(stdout);
-                // }
-                // if(stderr) {
-                //     console.log(stderr);
-                // }
-
-                exec(`youtube-dl -f bestaudio[ext=m4a] --get-url ${videoId}`, function(err, stdout, stderr) {
-                    if(err) {
-                        console.log(`[${obj.friendlyName}]: Error getting URL from youtube-dl:`);
-                        // Enable to see what went wrong
-                        // console.log(err);
-                        // if(stdout) {
-                        //     console.log(stdout);
-                        // }
-                        // if(stderr) {
-                        //     console.log(stderr);
-                        // }
-                    } else {
-                        // Call the callback with the retrieved URL
+    getAudioUrl(videoId) {
+        return new Promise((resolve, reject) => {
+        
+            // Call yt-dlp to get the audio URL
+            exec(`yt-dlp -f bestaudio[ext=m4a] --get-url "https://www.youtube.com/watch?v=${videoId}"`, (err, stdout, stderr) => {
+                    if (err) {
+                        console.log('Unable to get audio URL using yt-dlp. Using youtube-dl but this is slower!');
+                        exec(`youtube-dl -f bestaudio[ext=m4a] --get-url "https://www.youtube.com/watch?v=${videoId}"`, function (err, stdout, stderr) {
+                            if (err) {
+                                console.log(` Error getting URL from youtube-dl:`);
+                                reject(err);
+                            } else {
+                                // Resolve the promise with the retrieved URL
+                                const audioUrl = stdout.toString().trim();
+                                console.log(`Media URL: ${audioUrl}`);
+                                resolve(audioUrl);
+                            }
+                        });
+                    }
+                    else {
+                        // Resolve the promise with the retrieved URL
                         const audioUrl = stdout.toString().trim();
-                        console.log(`[${obj.friendlyName}]: Media URL: ${audioUrl}`);
-                        callback(audioUrl);
+                        console.log(`[${this.friendlyName}]: Media URL: ${audioUrl}`);
+                        resolve(audioUrl);
                     }
                 });
-            }
-            else {
-                // Call the callback with the retrieved URL
-                const audioUrl = stdout.toString().trim();
-                console.log(`[${obj.friendlyName}]: Media URL: ${audioUrl}`);
-                callback(audioUrl);
-            }
         });
+        
     }
 
     /**
@@ -142,198 +116,89 @@ class Renderer extends Ytcr.Player {
      */
     async play(videoId, position = 0) {
         console.log(`[${this.friendlyName}]: Play ${videoId} at position ${position}s`);
-        const obj = this;
+        this.lastPlayBackCommand = 'NOTHING';
 
-        this.getAudioUrl(videoId, function(audioUrl) {
-            const url = new URL(audioUrl);
-
-            // Stop the existing proxy (if there is one)
-            if(obj.proxy) {
-                obj.proxy.close();
-            }
-
-            // Create an HTTP -> HTTPS proxy, allowing the renderer to retrieve the file over HTTP
-            const proxyPort = PROXY_BASE_PORT + obj.index;
-            const proxyOptions = {
-                target: {
-                    protocol: url.protocol,
-                    host: url.host,
-                    port: url.port || 443
-                },
-                changeOrigin: true
-            };
-            obj.proxy = httpProxy.createProxyServer(proxyOptions);
-            obj.proxy.listen(proxyPort);
-
-            // Create a URL to give to the renderer with the same path and params, but starting http://our-hostname:port
-            const hostname = os.hostname();
-            const rendererUrl = `http://${hostname}:${proxyPort}/${url.pathname}${url.search}`;
-
-            // Load and play the URL on the renderer
-            const options = { autoplay: true,
-                                contentType: 'audio/mp4' };
-            obj.client.load(rendererUrl, options, function(err, result) {
-                if(err) {
-                    console.log(`[${obj.friendlyName}]: Error loading media:`)
-                    console.log(err);
-                }
-                else {
-                    obj.notifyPlayed();
-                }
-            });
-        });
+        const audioUrl = await this.getAudioUrl(videoId);
+        await this.client.api.queue.clear();
+        await this.client.api.queue.add(audioUrl);
+        await this.client.api.playback.play();
+        this.lastPlayBackCommand = 'PLAY';
+        return;
     }
 
     async pause() {
         console.log(`[${this.friendlyName}]: Pause`);
-        const obj = this;
+        this.lastPlayBackCommand = 'PAUSE';
 
-        // Pause the dlna renderer
-        this.client.pause(function(err, result) {
-            if (err) {
-                console.log(`[${obj.friendlyName}]: Pause error:`);
-                console.log(err);
-            } else {
-                console.log(`[${obj.friendlyName}]: Paused`);
-
-                // Notify YouTube that we have paused
-                obj.notifyPaused();
-            }
-        });
+        await this.client.api.playback.pause();
+        this.notifyPaused();
     }
 
     async resume() {
         console.log(`[${this.friendlyName}]: Resume`);
-        const obj = this;
+        this.lastPlayBackCommand = 'PLAY';
 
         // Play (=resume) the dlna renderer
-        this.client.play(function(err, result) {
-            if (err) {
-                console.log(`[${obj.friendlyName}]: Resume error:`);
-                console.log(err);
-            } else {
-                console.log(`[${obj.friendlyName}]: Resumed`);
-
-                // Notify YouTube that we have resumed
-                obj.notifyResumed();
-            }
-        });
+        await this.client.api.playback.resume();
+        this.notifyResumed();
     }
 
     async stop() {
         console.log(`[${this.friendlyName}]: Stop`);
-        const obj = this;
-        
+        this.lastPlayBackCommand = 'STOP';
         // Stop the dlna renderer
-        this.client.stop(function(err, result) {
-            if (err) {
-                console.log(`[${obj.friendlyName}]: Stop error:`);
-                console.log(err);
-            } else {
-                console.log(`[${obj.friendlyName}]: Stopped`);
-
-                // Notify YouTube that we have stopped
-                obj.notifyStopped();
-            }
-        });
+        await this.client.api.playback.stop();
     }
 
     async seek(position, statusBeforeSeek) {
         console.log(`[${this.friendlyName}]: Seek to ${position}s, statusBeforeSeek ${statusBeforeSeek}`);
-        const obj = this;
 
         // Tell the dlna renderer to seek
-        this.client.seek(position, function(err, result) {
-            if (err) {
-                console.log(`[${obj.friendlyName}]: Seek error:`);
-                console.log(err);
-            } else {
-                console.log(`[${obj.friendlyName}]: Seeked`);
-
-                // Notify YouTube that we have seeked
-                obj.notifySeeked(statusBeforeSeek);
-            }
-        });
+        await this.client.api.playback.seekcur(position);
+        console.log(statusBeforeSeek);
+        this.notifySeeked(statusBeforeSeek);
     }
 
     async getVolume() {
         console.log(`[${this.friendlyName}]: getVolume`);
-        const obj = this;
-
-        const promise = new Promise(function(resolve, reject) {
-            obj.client.getVolume(function(err, result) {
-                if(err) {
-                    console.log(`[${obj.friendlyName}]: getVolume error:`);
-                    console.log(err);
-                    reject(err);
-                } else {
-                    console.log(`[${obj.friendlyName}]: getVolume ${result}`);
-                    resolve(result);
-                }
-            })
-        });
-
-        return promise;
+        const status = await this.client.api.status.get();
+        console.log('Current volume: ' + status.volume);
+        return status.volume;
     }
 
     async setVolume(volume) {
         console.log(`[${this.friendlyName}]: setVolume to ${volume}`);
-        const obj = this;
 
         // Set the volume on the dlna renderer
-        this.client.setVolume(volume, function(err, result) {
-            if (err) {
-                console.log(`[${obj.friendlyName}]: setVolume error:`);
-                console.log(err);
-            } else {
-                console.log(`[${obj.friendlyName}]: Volume set`);
+        console.log(volume);
+        await this.client.api.playback.setvol(volume);
+        this.notifyVolumeChanged();
 
-                // Notify YouTube that we have stopped
-                obj.notifyVolumeChanged();
-            }
-        });
     }
 
     async getPosition() {
         console.log(`[${this.friendlyName}]: getPosition`);
-
-        const obj = this;
-
-        const promise = new Promise(function(resolve, reject) {
-            obj.client.getPosition(function(err, result) {
-                if(err) {
-                    console.log(`[${obj.friendlyName}]: getPosition error:`);
-                    console.log(err);
-                    reject(err);
-                } else {
-                    console.log(`[${obj.friendlyName}]: getPosition ${result}`);
-                    resolve(result);
-                }
-            })
-        });
-
-        return promise;
+        const status = await this.client.api.status.get()
+        if(typeof status.elapsed === 'undefined') {
+            //await for one second
+            await new Promise(r => setTimeout(r, 100));
+            return "0";
+        }
+        //mpd has higher precision than lounge api  
+        return Math.floor(status.elapsed);
     }
 
     async getDuration() {
         console.log(`[${this.friendlyName}]: getDuration`);
 
-        const obj = this;
-
-        const promise = new Promise(function(resolve, reject) {
-            obj.client.getDuration(function(err, result) {
-                if(err) {
-                    console.log(`[${obj.friendlyName}]: getDuration error:`);
-                    console.log(err);
-                    reject(err);
-                } else {
-                    console.log(`[${obj.friendlyName}]: getDuration ${result}`);
-                    resolve(result);
-                }
-            })
-        });
-
-        return promise;
+        //retry status until its not undefined
+        const status = await this.client.api.status.get();
+        if(typeof status.duration === 'undefined') {
+            //await for one second
+            return "0";
+        }
+        //mpd has higher precision than lounge api  
+        return Math.floor(status.duration);
     }
 }
 
