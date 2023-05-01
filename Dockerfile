@@ -1,13 +1,15 @@
-FROM alpine:3.17
-
+FROM alpine:latest
 RUN apk add --no-cache \
     git \
     npm \
-    yt-dlp
+    yt-dlp \
+    youtube-dl
 
-RUN git clone https://github.com/dgalli1/ytm-mpd.git /tmp/upnpTube \
-    && cd /tmp/upnpTube \
-    && npm ci \
-    && npm link
+VOLUME /app
 
-ENTRYPOINT [ "node", "/usr/local/bin/upnpTube" ]
+WORKDIR /app
+
+COPY . .
+RUN npm ci
+RUN npm run build
+ENTRYPOINT [ "node", "/app/dist/index.js" ]

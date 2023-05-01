@@ -1,2 +1,6 @@
-
 node_modules/
+dist/
+.node-persist/
+.mpd--data/
+
+mpd-data/

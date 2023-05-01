@@ -1,0 +1,19 @@
+{
+    "compilerOptions": {
+      "target": "ES2022",
+      "module": "ES2022",
+      "sourceMap": true,
+      "inlineSources": true,
+      "typeRoots" : ["./node_modules/@types", "./typings"],
+      "outDir": "./dist",
+      "rootDir": "./src",
+      "moduleResolution": "node",
+      "declaration": true,
+      "declarationMap": true,
+      "esModuleInterop": true,
+    },
+    "include": ["./src/**/*.ts"],
+    "exclude": ["./node_modules"],
+    "resolveJsonModule": true,
+    "ts-node": {"esm": true}
+}

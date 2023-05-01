@@ -1,41 +1,65 @@
 # ytm-mpd
-Cast from YouTube app to MPD.
+Cast from YouTube/Youtube Music app to MPD. Other apps will not work as were basically using youtube.com/tv for receiving the current songs.  
+Mostly inspired by upnpTube https://github.com/mas94uk/upnpTube but without dlna support and instead support for a single mpd instance. 
+## Why MPD?
 
-Mostly inspired by upnpTube https://github.com/mas94uk/upnpTube but without dlna support and instead a hardcoded mpd instance. 
+MPD is a greate tool which works on every platform and can output to almost all sound devices. You can output to dlna, fifo or hardware devices.  
+Implementing all of this would be a harder then to maintain then simply using mpd. On top of that it also automaticly buffers the stream and handels all of the complex logic. 
 
-Run upnpTube on a machine on your local network. It finds all UPnP / DLNA renderers (Wifi speakers, amplifiers, smart TVs etc.) and lets you cast to them from the Android/iPhone YouTube apps.
 
-The YouTube app can be used to play, pause, stop and control the volume of the player.
+## Road Map
+
+1. Local HTTP Cache
+
+2. Sponsorblock Support
+
+3. Connect to local Music Database and use those instead of youtube if they exists (e.x Local FLAC library)
 
 
 ## Installation
 
-### Local installation
+### Docker
+
+```yml
+version: '3.8'
+services:
+  yt-mpd:
+    #image is not yet built soon tm
+    image: ghcr.io/dgalli1/ytm-mpd:latest 
+    # for now it only works with host network, i belive auto discovery doesn't work without it
+    network_mode: 'host'
+    environment:
+      - MPD_HOST=localhost
+      - MPD_PORT=6600
+      - MPD_PASSWORD=
+    depends_on:
+      - mpd
+  mpd:
+    #image: tobi312/rpi-mpd:debian
+    image: tobi312/rpi-mpd:alpine
+    container_name: mpd
+    restart: unless-stopped
+    ports:
+      - 6600:6600  # MPD Client
+      - 8000:8000  # Stream
+    volumes:
+      - ./mpd-data:/var/lib/mpd/data:rw
+      #- ./mpd.conf:/etc/mpd.conf:rw
+    devices:
+      - "/dev/snd:/dev/snd"
+```
+
+### Bare-Metal installation
 Install npm and node.js:
 
-    sudo apt install npm
+    sudo apt install npm yt-dlp youtube-dl ffmpeg
     
-Install upnpTube:
+Install ytm-mpd:
 
-    mkdir upnpTube
-    cd upnoTube
-    npm install https://github.com/mas94uk/upnpTube
-    sudo npm link
-    
-Install yt-dlp:
+    git clone https://github.com/dgalli1/ytm-mpd.git
+    cd ytm-mpd
+    npm run build
 
-    sudo apt install yt-dlp
+Run yt-mpd:
 
-Run it:
-
-    upnpTube
-    
-
-### Installation using Docker
-TODO: Write some instruction here
-
-### How it works
-upnpTube scans for DLNA/UPNP renderers on your network. For each one it finds, it creates a YouTube Cast Receiver, named after the renderer.
-When a YouTube Cast Receiver receives a cast, it uses yt-dlp to find an audio-only stream, which it proxies (since it will be available as HTTPS and most renderers support only HTTP). It instructs the renderer to play the proxied stream.
-
-
+    MPD_HOST=localhost MPD_PORT=6600 MPD_PASSWORD=YOUR_PASSWORD  node dist/index.js

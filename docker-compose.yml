@@ -1,0 +1,26 @@
+version: '3.8'
+services:
+  yt-mpd:
+    build:
+      context: .
+    # for now it only works with host network, i belive auto discovery doesn't work without it
+    network_mode: 'host'
+    environment:
+      - MPD_HOST=localhost
+      - MPD_PORT=6600
+      - MPD_PASSWORD=
+    depends_on:
+      - mpd
+  mpd:
+    #image: tobi312/rpi-mpd:debian
+    image: tobi312/rpi-mpd:alpine
+    container_name: mpd
+    restart: unless-stopped
+    ports:
+      - 6600:6600  # MPD Client
+      - 8000:8000  # Stream
+    volumes:
+      - ./mpd-data:/var/lib/mpd/data:rw
+      #- ./mpd.conf:/etc/mpd.conf:rw
+    devices:
+      - "/dev/snd:/dev/snd"

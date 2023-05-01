@@ -1,11 +1,13 @@
 {
-  "name": "upnptube",
-  "version": "0.0.1",
+  "name": "ytm-mpd",
+  "version": "0.0.2",
   "description": "Cast from YouTube app to DLNA/UPNP renderers",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "tsc -w -p tsconfig.json | nodemon --watch 'dist/**/*.js' --exec 'node dist/index.js'",
+    "build": "tsc"
   },
+  "type": "module",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dgalli1/ytm-mpd.git"
@@ -27,9 +29,14 @@
   "dependencies": {
     "http-proxy": "^1.18.1",
     "mpd-api": "^1.1.1",
-    "yt-cast-receiver": "git+https://github.com/dgalli1/yt-cast-receiver.git"
+    "yt-cast-receiver": "^1.1.0"
   },
   "bin": {
-    "upnpTube": "./index.js"
+    "ytm-mpd": "./index.js"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.4"
   }
 }
