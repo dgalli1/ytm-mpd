@@ -4,7 +4,7 @@ Mostly inspired by upnpTube https://github.com/mas94uk/upnpTube but without dlna
 ## Why MPD?
 
 MPD is a greate tool which works on every platform and can output to almost all sound devices. You can output to dlna, fifo or hardware devices.  
-Implementing all of this would be a harder then to maintain then simply using mpd. On top of that it also automaticly buffers the stream and handels all of the complex logic. 
+Implementing all of this would be a harder then to maintain then simply using mpd. On top of that it also automaticly buffers the stream and handels all of the complex logic. Also integration stuff like snapcast is already documented.
 
 
 ## Road Map
@@ -24,8 +24,7 @@ Implementing all of this would be a harder then to maintain then simply using mp
 version: '3.8'
 services:
   yt-mpd:
-    #image is not yet built soon tm
-    image: ghcr.io/dgalli1/ytm-mpd:latest 
+    image: ghcr.io/dgalli1/ytm-mpd:main
     # for now it only works with host network, i belive auto discovery doesn't work without it
     network_mode: 'host'
     environment:
