@@ -1,5 +1,5 @@
 # ytm-mpd
-Cast from YouTube/Youtube Music app to MPD. Other apps will not work as were basically using youtube.com/tv for receiving the current songs.  
+Cast from YouTube/Youtube Music app to MPD. Other apps will not work as we're basically using youtube.com/tv for receiving the current songs.  
 Mostly inspired by upnpTube https://github.com/mas94uk/upnpTube but without dlna support and instead support for a single mpd instance. 
 ## Why MPD?
 
