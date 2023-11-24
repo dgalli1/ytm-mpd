@@ -1,7 +1,8 @@
-FROM alpine:latest
+FROM node:lts-alpine3.18
 RUN apk add --no-cache \
     git \
-    npm \
+    make \
+    g++ \
     yt-dlp \
     youtube-dl
 
