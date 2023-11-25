@@ -57,6 +57,7 @@ Install ytm-mpd:
 
     git clone https://github.com/dgalli1/ytm-mpd.git
     cd ytm-mpd
+    npm install
     npm run build
 
 Run yt-mpd:
