@@ -14,22 +14,21 @@ export class MpdPlayer extends Player {
     {
         // Call the Ytcr.Player constructor
         super();
-        (async () => {
-          
-            console.log("Creating new renderer: " + config.host);
-            this.httpServer = null;
-            // Instantiate the mediarender client
-            this.config = config
-            
-            this.client = await mpdapi.connect(config);
-            await this.client.api.playback.single('oneshot');
-            await this.client.api.playback.consume("0");
-            await this.client.api.queue.clear();
-            this.currentPlayStatus = 'stopped';
-            this.lastPlayBackCommand = 'NOTHING';
-        })();
-       
+        this.config = config;
+    }
 
+    public async initialize() {
+        console.log("Creating new renderer: " + this.config.host);
+        this.httpServer = null;
+        // Instantiate the mediarender client
+        
+        this.client = await mpdapi.connect(this.config);
+        await this.client.api.playback.single('oneshot');
+        await this.client.api.playback.consume("0");
+        await this.client.api.queue.clear();
+        this.currentPlayStatus = 'stopped';
+        this.lastPlayBackCommand = 'NOTHING';
+        console.log('Connected to renderer!');
     }
 
     protected async doPlay(video: Video, position: number): Promise<boolean> {
